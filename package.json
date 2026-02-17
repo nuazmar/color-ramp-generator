@@ -1,0 +1,11 @@
+{
+  "name": "A11y-Color-Ramp-Generator",
+  "version": "1.0.0",
+  "description": "Tu plugin de Figma",
+  "main": "code.js",
+  "scripts": {
+    "build": "echo \"No build step needed for plain JS\""
+  },
+  "author": "",
+  "license": ""
+}
