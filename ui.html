@@ -1,17 +1,193 @@
-<h2>Rectangle Creator</h2>
-<p>Count: <input id="count" type="number" value="5"></p>
-<button id="create">Create</button>
-<button id="cancel">Cancel</button>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #111827;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --focus: #2563eb;
+    --danger: #b91c1c;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+      Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--fg);
+    margin: 16px;
+  }
+
+  h2 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 0 0 12px 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  input, select, textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    outline: none;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  }
+
+  .buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  button {
+    appearance: none;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #f9fafb;
+    cursor: pointer;
+  }
+
+  button.primary {
+    background: #111827;
+    color: #ffffff;
+    border-color: #111827;
+  }
+
+  button.danger {
+    background: #fff1f2;
+    border-color: #fecdd3;
+    color: var(--danger);
+  }
+
+  textarea {
+    min-height: 170px;
+    resize: vertical;
+    font-family: var(--mono);
+    white-space: pre;
+  }
+
+  .hint {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+</style>
+
+<h2>A11y Color Ramp Generator (OKLCH)</h2>
+<p>
+  Selecciona en el lienzo tu <b>instancia del componente de rampa</b> (o el frame que contiene los slots).
+  Primero usa <b>Diagnosticar</b> para obtener el árbol de capas y asegurar que el plugin encuentra los campos.
+</p>
+
+<div class="row">
+  <div>
+    <label for="steps">Pasos (máx. 14)</label>
+    <input id="steps" type="number" min="2" max="14" value="14" />
+  </div>
+  <div>
+    <label for="baseHex">Color base (HEX)</label>
+    <input id="baseHex" type="text" value="#3366FF" placeholder="#RRGGBB" />
+  </div>
+</div>
+
+<div class="row">
+  <div>
+    <label for="lMin">L mínimo (oscuro)</label>
+    <input id="lMin" type="number" min="0" max="1" step="0.01" value="0.18" />
+  </div>
+  <div>
+    <label for="lMax">L máximo (claro)</label>
+    <input id="lMax" type="number" min="0" max="1" step="0.01" value="0.97" />
+  </div>
+</div>
+
+<div class="row">
+  <div>
+    <label for="labelScheme">Etiquetas de paso</label>
+    <select id="labelScheme">
+      <option value="50-950">50–950 (14 pasos)</option>
+      <option value="1-14">1–14</option>
+    </select>
+  </div>
+  <div>
+    <label for="chromaScale">Escala de chroma</label>
+    <input id="chromaScale" type="number" min="0" max="2" step="0.01" value="1.00" />
+  </div>
+</div>
+
+<div class="buttons">
+  <button id="diagnose">Diagnosticar selección</button>
+  <button class="primary" id="generate">Generar rampa</button>
+  <button class="danger" id="cancel">Cerrar</button>
+</div>
+
+<div class="hint">Salida (cópiala y pégamela si algo no cuadra)</div>
+<textarea id="output" spellcheck="false" placeholder="Aquí aparecerá el diagnóstico o el log de generación..."></textarea>
+
 <script>
+  const $ = (id) => document.getElementById(id);
+  const output = $('output');
 
-document.getElementById('create').onclick = () => {
-  const textbox = document.getElementById('count');
-  const count = parseInt(textbox.value, 10);
-  parent.postMessage({ pluginMessage: { type: 'create-shapes', count } }, '*')
-}
+  function post(msg) {
+    parent.postMessage({ pluginMessage: msg }, '*');
+  }
 
-document.getElementById('cancel').onclick = () => {
-  parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*')
-}
+  $('diagnose').onclick = () => {
+    output.value = 'Diagnosticando selección…';
+    post({ type: 'diagnose-selection' });
+  };
 
+  $('generate').onclick = () => {
+    output.value = 'Generando rampa…';
+    post({
+      type: 'generate-ramp',
+      steps: Math.max(2, Math.min(14, parseInt($('steps').value, 10) || 14)),
+      baseHex: $('baseHex').value.trim(),
+      lMin: parseFloat($('lMin').value),
+      lMax: parseFloat($('lMax').value),
+      labelScheme: $('labelScheme').value,
+      chromaScale: parseFloat($('chromaScale').value),
+    });
+  };
+
+  $('cancel').onclick = () => post({ type: 'cancel' });
+
+  onmessage = (event) => {
+    const msg = event.data && event.data.pluginMessage;
+    if (!msg) return;
+    if (msg.type === 'output') {
+      output.value = msg.text || '';
+    }
+  };
 </script>
