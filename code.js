@@ -404,8 +404,25 @@ function findInfoValueText(slotNode, labelKey /* hex|rgb|oklch */) {
 function findContrastText(slotNode, sectionName /* on-surface|on-dark-surface */) {
   const section = findDescendantByName(slotNode, sectionName, 'FRAME');
   if (!section) return null;
-  // Dentro de cada sección, el valor es TEXT name "0-00"
-  return findDescendantByName(section, '0-00', 'TEXT');
+
+  // En el componente, el KPI suele ser un TEXT que inicialmente contiene "0.00"
+  // (a veces el nombre no es estable entre instancias/exports), así que lo buscamos por contenido.
+  const texts = allTextNodes(section);
+  const trimmed = texts
+    .map((t) => ({ t, v: String(t.characters || '').trim() }))
+    .filter(({ v }) => v.length > 0);
+
+  // Preferimos exactamente "0.00"
+  const exact = trimmed.find(({ v }) => v === '0.00');
+  if (exact) return exact.t;
+
+  // Si ya está rellenado con un número, también lo aceptamos.
+  const numeric = trimmed.find(({ v }) => /^[0-9]+(\.[0-9]+)?$/.test(v));
+  if (numeric) return numeric.t;
+
+  // Fallback: intentamos por nombre "0-00"
+  const byName = findDescendantByName(section, '0-00', 'TEXT');
+  return byName;
 }
 
 function setBadgeOpacities(slotNode, sectionName, contrast) {
@@ -415,8 +432,17 @@ function setBadgeOpacities(slotNode, sectionName, contrast) {
   const aaaOk = contrast >= 7.0;
   const aaFrames = findDescendants(section, (n) => n.type === 'FRAME' && normalizeKey(n.name) === 'aa', 6);
   const aaaFrames = findDescendants(section, (n) => n.type === 'FRAME' && normalizeKey(n.name) === 'aaa', 6);
-  for (const n of aaFrames) n.opacity = aaOk ? 1 : 0.25;
-  for (const n of aaaFrames) n.opacity = aaaOk ? 1 : 0.25;
+  // Visibilidad binaria según cumpla o no el estándar:
+  // - Si cumple AA/AAA, el grupo de capas se muestra (visible = true, opacity = 1)
+  // - Si no cumple, se oculta completamente (visible = false)
+  for (const n of aaFrames) {
+    n.visible = aaOk;
+    if (aaOk) n.opacity = 1;
+  }
+  for (const n of aaaFrames) {
+    n.visible = aaaOk;
+    if (aaaOk) n.opacity = 1;
+  }
 }
 
 async function applyToSlot(slotNode, payload) {
@@ -447,6 +473,7 @@ async function applyToSlot(slotNode, payload) {
   const oklchValue = findInfoValueText(slotNode, 'oklch');
   if (oklchValue) await setText(oklchValue, payload.oklchValueString);
 
+  // KPI contraste (W3C): texto negro sobre fondo (on-surface) y texto blanco sobre fondo (on-dark-surface)
   const contrastBlackText = findContrastText(slotNode, 'on-surface');
   if (contrastBlackText) await setText(contrastBlackText, payload.contrastBlack);
 
