@@ -138,11 +138,23 @@
     <select id="labelScheme">
       <option value="50-950">50–950 (14 pasos)</option>
       <option value="1-14">1–14</option>
+      <option value="custom">Escala personalizada</option>
     </select>
   </div>
   <div>
     <label for="chromaScale">Escala de chroma</label>
     <input id="chromaScale" type="number" min="0" max="2" step="0.01" value="1.00" />
+  </div>
+</div>
+
+<div class="row" id="customScaleRow" style="display: none;">
+  <div>
+    <label for="scaleStart">Valor inicial</label>
+    <input id="scaleStart" type="number" value="0" />
+  </div>
+  <div>
+    <label for="scaleEnd">Valor final</label>
+    <input id="scaleEnd" type="number" value="100" />
   </div>
 </div>
 
@@ -168,15 +180,29 @@
     post({ type: 'diagnose-selection' });
   };
 
+  $('labelScheme').onchange = () => {
+    const customRow = $('customScaleRow');
+    if ($('labelScheme').value === 'custom') {
+      customRow.style.display = 'grid';
+    } else {
+      customRow.style.display = 'none';
+    }
+  };
+
   $('generate').onclick = () => {
     output.value = 'Generando rampa…';
+    const labelScheme = $('labelScheme').value;
+    const scaleStart = labelScheme === 'custom' ? parseFloat($('scaleStart').value) : null;
+    const scaleEnd = labelScheme === 'custom' ? parseFloat($('scaleEnd').value) : null;
     post({
       type: 'generate-ramp',
       steps: Math.max(2, Math.min(14, parseInt($('steps').value, 10) || 14)),
       baseHex: $('baseHex').value.trim(),
       lMin: parseFloat($('lMin').value),
       lMax: parseFloat($('lMax').value),
-      labelScheme: $('labelScheme').value,
+      labelScheme: labelScheme,
+      scaleStart: scaleStart,
+      scaleEnd: scaleEnd,
       chromaScale: parseFloat($('chromaScale').value),
     });
   };

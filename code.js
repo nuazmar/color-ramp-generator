@@ -145,8 +145,84 @@ function contrastRatio(rgbA, rgbB) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-function labelSteps(steps, scheme) {
+function labelSteps(steps, scheme, scaleStart, scaleEnd) {
   if (scheme === '1-14') return Array.from({ length: steps }, (_, i) => String(i + 1));
+  if (scheme === 'custom' && scaleStart !== null && scaleStart !== undefined && scaleEnd !== null && scaleEnd !== undefined) {
+    // Escala personalizada: interpolar entre scaleStart y scaleEnd, redondeado a bloques de 5 o 10
+    // Mezcla bloques de 10 y 5 según sea necesario para evitar valores duplicados
+    const range = Math.abs(scaleEnd - scaleStart);
+    const stepSize = range / (steps - 1 || 1);
+    
+    // Calcular primero todos los valores interpolados exactos
+    const exactValues = Array.from({ length: steps }, (_, i) => {
+      const t = steps === 1 ? 0 : i / (steps - 1);
+      return scaleStart + (scaleEnd - scaleStart) * t;
+    });
+    
+    // Primera pasada: intentar redondear a múltiplos de 10
+    const rounded10 = exactValues.map(v => Math.round(v / 10) * 10);
+    const seen = new Set();
+    const labels = [];
+    const isDescending = scaleStart > scaleEnd;
+    
+    for (let i = 0; i < rounded10.length; i++) {
+      let value = rounded10[i];
+      let label = String(value);
+      
+      // Si hay duplicado, usar múltiplo de 5
+      if (seen.has(label)) {
+        value = Math.round(exactValues[i] / 5) * 5;
+        label = String(value);
+        
+        // Si aún hay duplicado, buscar el múltiplo de 5 más cercano disponible
+        if (seen.has(label)) {
+          const base5 = value;
+          const direction = isDescending ? -1 : 1;
+          
+          // Buscar alternativas en múltiplos de 5 manteniendo el orden
+          for (let offset = 5; offset <= range; offset += 5) {
+            const candidate1 = base5 + (offset * direction);
+            const candidate2 = base5 - (offset * direction);
+            
+            // Probar candidato en dirección del orden primero
+            const candidate = direction > 0 ? candidate1 : candidate2;
+            const candidateLabel = String(candidate);
+            
+            if (!seen.has(candidateLabel)) {
+              // Verificar que mantiene el orden
+              if (labels.length === 0 || 
+                  (isDescending && candidate <= parseInt(labels[labels.length - 1])) ||
+                  (!isDescending && candidate >= parseInt(labels[labels.length - 1]))) {
+                value = candidate;
+                label = candidateLabel;
+                break;
+              }
+            }
+            
+            // Probar el otro candidato
+            const otherCandidate = direction > 0 ? candidate2 : candidate1;
+            const otherLabel = String(otherCandidate);
+            
+            if (!seen.has(otherLabel)) {
+              // Verificar que mantiene el orden
+              if (labels.length === 0 || 
+                  (isDescending && otherCandidate <= parseInt(labels[labels.length - 1])) ||
+                  (!isDescending && otherCandidate >= parseInt(labels[labels.length - 1]))) {
+                value = otherCandidate;
+                label = otherLabel;
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      seen.add(label);
+      labels.push(label);
+    }
+    
+    return labels;
+  }
   // Default: 50-950 with 14 steps. If steps != 14, interpolate.
   const min = 50;
   const max = 950;
@@ -159,12 +235,12 @@ function labelSteps(steps, scheme) {
   });
 }
 
-function buildRampOklch({ baseOklch, steps, lMin, lMax, chromaScale, labelScheme }) {
+function buildRampOklch({ baseOklch, steps, lMin, lMax, chromaScale, labelScheme, scaleStart, scaleEnd }) {
   const Ldark = clamp01(lMin);
   const Llight = clamp01(lMax);
   if (!(Ldark < Llight)) fail('L mínimo debe ser menor que L máximo.');
 
-  const labels = labelSteps(steps, labelScheme || (steps === 14 ? '50-950' : '1-14'));
+  const labels = labelSteps(steps, labelScheme || (steps === 14 ? '50-950' : '1-14'), scaleStart, scaleEnd);
   const out = [];
   for (let i = 0; i < steps; i++) {
     const t = steps === 1 ? 0 : i / (steps - 1);
@@ -531,8 +607,10 @@ figma.ui.onmessage = async (msg) => {
     const lMax = Number.isFinite(msg.lMax) ? msg.lMax : 0.97;
     const chromaScale = Number.isFinite(msg.chromaScale) ? msg.chromaScale : 1;
     const labelScheme = msg.labelScheme;
+    const scaleStart = Number.isFinite(msg.scaleStart) ? msg.scaleStart : null;
+    const scaleEnd = Number.isFinite(msg.scaleEnd) ? msg.scaleEnd : null;
 
-    const ramp = buildRampOklch({ baseOklch, steps, lMin, lMax, chromaScale, labelScheme });
+    const ramp = buildRampOklch({ baseOklch, steps, lMin, lMax, chromaScale, labelScheme, scaleStart, scaleEnd });
 
     const slots = findSlots(node);
     if (slots.length === 0) {
